@@ -44,3 +44,15 @@ See examples of software building new gates in the previously mentioned [operato
 ## Available Gates
 
 Current gates available for simulation are documented at https://c2qa.github.io/bosonic-qiskit/c2qa.circuit.CVCircuit.html
+
+# CV-DV Benchmarking Files
+
+The following files are used for benchmarks
+1) State Transfer:- state_transfer.ipynb
+2) CV-DV QFT:- qft.ipynb
+3) Jaynes Cummings Hubbard Simulation:- jch_simulation.ipynb
+4) CV QAOA :- cv-qaoa.ipynb
+5) CV-DV VQE:- cv-dv-vqe.ipynb
+6) Cat State Generation :- cat_state.ipynb
+7) GKP State Generation:- gkp_state.ipynb
+8) CV-DV Shors(currently under development):- shors_hybrid.ipynb  (modified approach using np arrays)
