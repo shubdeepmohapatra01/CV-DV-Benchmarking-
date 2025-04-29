@@ -25,8 +25,8 @@ def kinetic_mixer(cutoff, gamma):
     return mixerH
 
 def cvQAOA(params,cutoff,depth,s,n,a,costval,estval):
-    gamma_list = params[:depth]  # First 'p' values for gamma
-    eta_list = params[depth:]    # Next 'p' values for eta
+    gamma_list = params[:depth]  
+    eta_list = params[depth:]    
 
     # Define Qumode and Classical Registers
     qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))))
@@ -35,18 +35,16 @@ def cvQAOA(params,cutoff,depth,s,n,a,costval,estval):
     # Initialize the circuit
     circuit = c2qa.CVCircuit(qmr, cr)
     circuit.cv_initialize(0, qmr[0])
-    circuit.cv_sq(-s, qmr[0])  # Apply initial squeezing
+    circuit.cv_sq(-s, qmr[0])  
 
     for i in range(depth):
         gamma = gamma_list[i]
         eta = eta_list[i]
 
-        # Cost Hamiltonian and gate
         costH = cost(cutoff, a,n, eta)
         gate1 = UnitaryGate(costH.full(), label=f'Uc_{eta}')
         circuit.append(gate1, qmr[0])
-
-        # Mixer Hamiltonian and gate
+        
         mixH = kinetic_mixer(cutoff, gamma)
         gate1 = UnitaryGate(mixH.full(), label=f'Um_{gamma}')
         circuit.append(gate1, qmr[0])
@@ -56,8 +54,6 @@ def cvQAOA(params,cutoff,depth,s,n,a,costval,estval):
     # st0 = Statevector.from_instruction(circuit) 
     state, _, _ = c2qa.util.simulate(circuit)
 
-    # # Convert to density matrix for expectation value calculation
-    # state_dens = Qobj(c2qa.util.trace_out_qubits(circuit, st0))
     expval = (expect(x, Qobj(state)))
 
     # Compute the cost function value
@@ -69,23 +65,8 @@ def cvQAOA(params,cutoff,depth,s,n,a,costval,estval):
     return (cost_val)
 
 def results_final(params, cutoff,depth,s,n,a):
-    """
-    Implements the final CVQAOA circuit, computes the expectation value, 
-    and returns the Wigner distribution and x-axis data.
-
-    Args:
-        params: List of QAOA parameters [gamma, eta].
-        cutoff: Fock state cutoff.
-        a: Parameter for the Cost Hamiltonian.
-        p: Number of QAOA layers.
-
-    Returns:
-        expval: Expectation value of the position operator.
-        x_dist: Marginal distribution along the x-axis.
-        xaxis: Corresponding x-axis values.
-    """
-    gamma_list = params[:depth]  # First 'p' parameters for gamma
-    eta_list = params[depth:]    # Next 'p' parameters for eta
+    gamma_list = params[:depth] 
+    eta_list = params[depth:]  
 
     # Define Qumode and Classical Registers
     qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))))
@@ -94,7 +75,7 @@ def results_final(params, cutoff,depth,s,n,a):
     # Initialize the circuit
     circuit = c2qa.CVCircuit(qmr, cr)
     circuit.cv_initialize(0, qmr[0])   # Initialize qumode to vacuum state
-    circuit.cv_sq(-s, qmr[0])          # Apply initial squeezing
+    circuit.cv_sq(-s, qmr[0])         
 
     # QAOA loop
     for i in range(depth):
@@ -108,17 +89,14 @@ def results_final(params, cutoff,depth,s,n,a):
         mixer_gate = UnitaryGate(mixH.full(), label=f'Um_{gamma_list[i]}')
         circuit.append(mixer_gate, qmr[0])
 
-    # Simulate the circuit
     state, _, _ = c2qa.util.simulate(circuit)
 
-    # Compute the expectation value of the position operator
     x = position(cutoff)
     expval = expect(x, Qobj(state))
 
-    # Wigner distribution and marginalization
     ax_min, ax_max, steps = -6, 6, 200
     w = c2qa.wigner.wigner(state, axes_max=ax_max, axes_min=ax_min, axes_steps=steps)
-    x_dist, _ = margins(w.T)  # Marginalize over y-axis
+    x_dist, _ = margins(w.T) 
 
     # Normalize the x-axis distribution
     x_dist *= (ax_max - ax_min) / steps
