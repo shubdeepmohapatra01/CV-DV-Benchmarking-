@@ -25,22 +25,6 @@ def coupling_term(beta,n,j,cutoff):
     return U
 
 def createCircuit(Nsites, Nqubits, cutoff, J, omega_r, omega_q, g, tau,display_circuit = False):
-    """
-    Creates a quantum circuit to simulate the Jaynes-Cummings-Hubbard (JCH) Hamiltonian.
-
-    Args:
-        Nsites: Number of qumodes/sites in the lattice.
-        Nqubits: Number of qubits in the circuit.
-        cutoff: Fock state cutoff for the qumodes.
-        J: Hopping parameter between qumodes.
-        omega_r: Resonator frequency.
-        omega_q: Qubit frequency.
-        g: Coupling strength between qubits and qumodes.
-        tau: Time step for evolution.
-
-    Returns:
-        A custom gate representing the unitary evolution of the JCH Hamiltonian.
-    """
     # Initialize registers
     qmr = c2qa.QumodeRegister(num_qumodes=Nsites, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))))
     qbr = QuantumRegister(Nqubits)
