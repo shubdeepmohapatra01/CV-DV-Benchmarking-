@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from qiskit import QuantumRegister, ClassicalRegister
 from qiskit.circuit.library import RGate
 from qiskit.converters import circuit_to_gate
+from qiskit.quantum_info import partial_trace
 from qutip import *
 from qiskit.circuit import Parameter
 from qiskit.circuit.library import UnitaryGate
@@ -48,7 +49,22 @@ def rotation_control(cutoff,sign):
     return tensor(qproj00(),qeye(cutoff)) + tensor(qproj11(),(1j*np.pi/2*sign*num(cutoff)).expm())
 
 def multiplication(cutoff,alpha):
-    M_alpha = single_mode_squeeze(cutoff,-np.log(alpha))
+    if alpha == 1:
+        return qeye(cutoff)
+
+    log_alpha = np.log(alpha)
+    l = int(np.ceil(abs(log_alpha)))
+    if l == 0:  
+        small_r = 0
+    else:
+        small_r = -log_alpha / l
+
+    S_small = single_mode_squeeze(cutoff, small_r)
+
+    M_alpha = qeye(cutoff)
+    for _ in range(l):
+        M_alpha = S_small @ M_alpha
+
     return M_alpha
 
 def extractLSB(cutoff):
@@ -62,7 +78,7 @@ def translation_R(cutoff,R):
 def control_multiplication(cutoff,alpha):
     rotation_plus = rotation_control(cutoff,1)
     # control_rotation_plus = tensor(qproj00(),qeye(cutoff)) + tensor(qproj11(),rotation_plus)
-    M_sqrt_alpha_dag = tensor(qeye(2),multiplication(cutoff,np.sqrt(alpha)).dag())
+    M_sqrt_alpha_dag = tensor(qeye(2),multiplication(cutoff,1/np.sqrt(alpha)))
     rotation_minus = rotation_control(cutoff,-1)
     # control_rotation_minus = tensor(qproj00(),qeye(cutoff)) + tensor(qproj11(),rotation_minus)
     M_sqrt_alpha = tensor(qeye(2),multiplication(cutoff,np.sqrt(alpha)))
@@ -94,7 +110,7 @@ def V_alpha(cutoff,circuit,qumode_register,qubit_register,alpha):
     gate1 =UnitaryGate(LSB_extract.full(), label='LSB2')
     circuit.append(gate1, qumode_register[2]+qubit_register[:])
     
-    M_half = multiplication(cutoff,2)
+    M_half = multiplication(cutoff,0.5)
     gate1 =UnitaryGate(M_half.full(), label='M1/2')
     circuit.append(gate1, qumode_register[0])
     
@@ -102,31 +118,31 @@ def V_alpha(cutoff,circuit,qumode_register,qubit_register,alpha):
 
 def V_alpha_dag(cutoff,circuit,qumode_register,qubit_register,alpha):
     M_half = multiplication(cutoff, 2)
-    gate1 = UnitaryGate(M_half.full(), label='M1/2')
+    gate1 = UnitaryGate(M_half.full(), label='M2')
     circuit.append(gate1, qumode_register[0])
 
-    LSB_extract = extractLSB(cutoff)
-    gate1 = UnitaryGate(LSB_extract.full(), label='LSB2')
+    LSB_extract = extractLSB(cutoff).dag()
+    gate1 = UnitaryGate(LSB_extract.full(), label='LSB2_dag')
     circuit.append(gate1, qumode_register[2] + qubit_register[:])
-
-    control_addition = Q_control_plus1(cutoff)
-    gate1 = UnitaryGate(control_addition.full(), label='Q+1')
-    circuit.append(gate1, qumode_register[2] + qubit_register[:])
-
-    Malpha = control_multiplication(cutoff, alpha)
-    gate1 = UnitaryGate(Malpha.full(), label=f'M_{alpha}')
-    circuit.append(gate1, qumode_register[1] + qubit_register[:])
 
     control_subtraction = Q_control_minus1(cutoff)
     gate1 = UnitaryGate(control_subtraction.full(), label='Q-1')
+    circuit.append(gate1, qumode_register[2] + qubit_register[:])
+
+    Malpha = control_multiplication(cutoff, 1/alpha)
+    gate1 = UnitaryGate(Malpha.full(), label=f'M_1/{alpha}')
+    circuit.append(gate1, qumode_register[1] + qubit_register[:])
+
+    control_addition = Q_control_plus1(cutoff)
+    gate1 = UnitaryGate(control_addition.full(), label='Q+1')
     circuit.append(gate1, qumode_register[0] + qubit_register[:])
 
-    LSB_extract = extractLSB(cutoff)
-    gate1 = UnitaryGate(LSB_extract.full(), label='LSB1')
+    LSB_extract = extractLSB(cutoff).dag()
+    gate1 = UnitaryGate(LSB_extract.full(), label='LSB1_dag')
     circuit.append(gate1, qumode_register[0] + qubit_register[:])
 
-    M_2 = multiplication(cutoff, 2)
-    gate1 = UnitaryGate(M_2.full(), label='M2')
+    M_2 = multiplication(cutoff, 0.5)
+    gate1 = UnitaryGate(M_2.full(), label='M1/2')
     circuit.append(gate1, qumode_register[2])
     
     return circuit
@@ -137,7 +153,9 @@ def V_aNm(cutoff,circuit,qumode_register,qubit_register,a,N,m):
         circuit = V_alpha(cutoff,circuit,qumode_register,qubit_register,alpha)
         circuit.barrier()
         
-    for _ in range(m):
+    # print("V gates done")
+
+    for i in range(m):
         circuit = V_alpha_dag(cutoff,circuit,qumode_register,qubit_register,1)
         circuit.barrier()
         
@@ -150,6 +168,7 @@ def V_aNm_dagger(cutoff, circuit, qumode_register, qubit_register, a, N, m):
 
     for i in reversed(range(m)):
         alpha = pow(a, 2**i, N)
+        print(alpha)
         V_alpha_dag(cutoff, circuit, qumode_register, qubit_register, alpha)
         circuit.barrier()
     
@@ -177,7 +196,9 @@ def position_plotting(state,cutoff):
     x = position(cutoff)
     expval = expect(x, Qobj(state))
 
-    ax_min, ax_max, steps = -6, 6, 200
+    print(expval)
+
+    ax_min, ax_max, steps = -6, 6, 500
     w = c2qa.wigner.wigner(state, axes_max=ax_max, axes_min=ax_min, axes_steps=steps)
     x_dist, _ = margins(w.T)  # Marginalize over y-axis
 
@@ -197,3 +218,17 @@ def trace_out_qumode_index(circuit,state,qumode_register,qubit_register,qumode_i
         trace = c2qa.util.cv_partial_trace(circuit, trace, qumode_register[0]+qumode_register[1])
         
     return trace
+
+def get_reduced_qumode_density_matrix(stateop, qumode_index, num_qumodes, cutoff):
+    num_qubits_per_qumode = int(np.ceil(np.log2(cutoff)))
+    total_qubits = num_qumodes * num_qubits_per_qumode + 1
+
+    keep_indices = list(range(
+        qumode_index * num_qubits_per_qumode,
+        (qumode_index + 1) * num_qubits_per_qumode
+    ))
+
+    all_indices = list(range(total_qubits))
+    trace_indices = [i for i in all_indices if i not in keep_indices]
+
+    return partial_trace(stateop, trace_indices)
