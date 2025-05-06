@@ -192,19 +192,31 @@ def U_aNm(cutoff, circuit, qumode_register, qubit_register, a, N, m):
     return circuit
      
 
-def position_plotting(state,cutoff):
+def position_plotting(state, cutoff, ax_min=-6, ax_max=6, steps=500):
     x = position(cutoff)
     expval = expect(x, Qobj(state))
 
     print(expval)
 
-    ax_min, ax_max, steps = -6, 6, 500
     w = c2qa.wigner.wigner(state, axes_max=ax_max, axes_min=ax_min, axes_steps=steps)
     x_dist, _ = margins(w.T)  # Marginalize over y-axis
 
     x_dist *= (ax_max - ax_min) / steps
     xaxis = np.linspace(ax_min, ax_max, steps)
-    return x_dist,xaxis
+    return x_dist, xaxis
+
+def momentum_plotting(state, cutoff, ax_min=-6, ax_max=6, steps=500):
+    p = momentum(cutoff)
+    expval = expect(p, Qobj(state))
+
+    print("⟨p⟩ =", expval)
+
+    w = c2qa.wigner.wigner(state, axes_max=ax_max, axes_min=ax_min, axes_steps=steps)
+    _, p_dist = margins(w.T)  # Marginalize over x-axis for momentum
+
+    p_dist *= (ax_max - ax_min) / steps
+    paxis = np.linspace(ax_min, ax_max, steps)
+    return p_dist, paxis
 
 def trace_out_qumode_index(circuit,state,qumode_register,qubit_register,qumode_index='0'):
     if(qumode_index == '0'):
