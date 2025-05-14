@@ -206,11 +206,6 @@ def position_plotting(state, cutoff, ax_min=-6, ax_max=6, steps=500):
     return x_dist, xaxis
 
 def momentum_plotting(state, cutoff, ax_min=-6, ax_max=6, steps=500):
-    p = momentum(cutoff)
-    expval = expect(p, Qobj(state))
-
-    print("⟨p⟩ =", expval)
-
     w = c2qa.wigner.wigner(state, axes_max=ax_max, axes_min=ax_min, axes_steps=steps)
     _, p_dist = margins(w.T)  # Marginalize over x-axis for momentum
 
