@@ -105,3 +105,27 @@ def plot_radar_metrics(metrics_list, labels=None, title="CV-DV Radar Chart"):
     ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1))
     plt.tight_layout()
     plt.show()
+    
+    
+def wigner_negativity(state, axes_min=-6, axes_max=6, axes_steps=200, g=np.sqrt(2), method="clenshaw"):
+    """
+    Compute Wigner negativity from the Wigner function of a quantum state.
+
+    Args:
+        state (array-like): State vector or density matrix.
+        axes_min (int): Minimum axis value for phase space.
+        axes_max (int): Maximum axis value for phase space.
+        axes_steps (int): Resolution of the phase space grid.
+        g (float): Scaling factor (default sqrt(2)).
+        method (str): Method for Wigner function calculation.
+
+    Returns:
+        float: Wigner negativity.
+    """
+    xvec = np.linspace(axes_min, axes_max, axes_steps)
+    W = c2qa.wigner._wigner(state, xvec, g=g, method=method)
+    
+    dx = dy = (axes_max - axes_min) / (axes_steps - 1)
+    
+    negative_volume = np.sum(np.abs(W[W < 0])) * dx * dy
+    return negative_volume
