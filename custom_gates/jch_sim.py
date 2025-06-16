@@ -50,9 +50,10 @@ def createCircuit(Nsites, Nqubits, cutoff, J, omega_r, omega_q, g, tau,display_c
     # Qubit-qumode coupling
     theta_coupling = g * tau
     for i in range(len(qbr)):
-        coupling = coupling_term(theta_coupling, Nqubits, i,cutoff)
-        coupling_gate = UnitaryGate(coupling.full(), label=f'Coupling_{i}')
-        circuit.append(coupling_gate, qmr[:] + qbr[:])
+        circuit.cv_jc(theta_coupling,0,qmr[i],qbr[i])
+        # coupling = coupling_term(theta_coupling, Nqubits, i,cutoff)
+        # coupling_gate = UnitaryGate(coupling.full(), label=f'Coupling_{i}')
+        # circuit.append(coupling_gate, qmr[:] + qbr[:])
 
     # Draw the circuit for visualization
     if(display_circuit):
@@ -60,3 +61,33 @@ def createCircuit(Nsites, Nqubits, cutoff, J, omega_r, omega_q, g, tau,display_c
     
     # Convert to a gate for modular use
     return circuit_to_gate(circuit, label='U')
+
+def circuit_display(Nsites, Nqubits, cutoff, J, omega_r, omega_q, g, tau,timesteps,display_circuit = False):
+    qmr = c2qa.QumodeRegister(num_qumodes=Nsites, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))))
+    qbr = QuantumRegister(Nqubits)
+    circuit = c2qa.CVCircuit(qmr, qbr)
+    
+    for i in range(timesteps):
+        # Hopping interaction between adjacent qumodes
+        theta = -J * tau
+        for i in range(0, len(qmr) - 1, 2):
+            circuit.cv_bs(theta, qmr[i], qmr[i + 1])
+        for i in range(1, len(qmr) - 1, 2):
+            circuit.cv_bs(theta, qmr[i], qmr[i + 1])
+
+        # Local resonator evolution
+        theta_resonator = omega_r * tau
+        for i in range(len(qmr)):
+            circuit.cv_r(theta_resonator, qmr[i])
+
+        # Local qubit evolution
+        theta_qubit = omega_q * tau
+        for i in range(len(qbr)):
+            circuit.rz(theta_qubit, qbr[i])
+
+        # Qubit-qumode coupling
+        theta_coupling = g * tau
+        for i in range(len(qbr)):
+            circuit.cv_jc(theta_coupling,0,qmr[i],qbr[i])
+    
+    return circuit
