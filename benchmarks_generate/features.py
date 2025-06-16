@@ -5,6 +5,7 @@ from qutip import *
 import c2qa
 from collections import Counter
 import matplotlib.pyplot as plt
+from  qiskit.quantum_info import DensityMatrix
 
 def collect_cvcircuit_metrics(circuit):
     from collections import Counter
@@ -21,7 +22,7 @@ def collect_cvcircuit_metrics(circuit):
 
     for reg in circuit.qregs:
         name = reg.name.lower()
-        if any(tag in name for tag in ['qmode', 'cv', 'osc']):
+        if any(tag in name for tag in ['qmode', 'cv', 'osc','qumode','qmr']):
             qumode_regs.append(reg)
         else:
             qubit_regs.append(reg)
@@ -129,3 +130,29 @@ def wigner_negativity(state, axes_min=-6, axes_max=6, axes_steps=200, g=np.sqrt(
     
     negative_volume = np.sum(np.abs(W[W < 0])) * dx * dy
     return negative_volume
+
+def truncation_cost_approximate(state,n):
+    diag_probs = np.real(np.diag(state.data))
+    tail_fraction = sum(diag_probs[-n:])  # Last n levels
+    
+    return tail_fraction
+
+def average_energy(circuit,stateop,cutoff,omega_qubit = 1,omega_qumode = 1):
+    state_qumode = c2qa.util.trace_out_qubits(circuit,stateop)
+    qumode_dm = DensityMatrix(state_qumode)
+    
+    state_qubit = c2qa.util.trace_out_qumodes(circuit,stateop)
+    qubit_dm = DensityMatrix(state_qubit)
+    
+    n_op = num(cutoff).full()
+    n_expect = np.trace(qumode_dm.data @ n_op).real
+    
+    sz = np.array([[1,0],[0,-1]])
+    z_expect = np.trace(qubit_dm.data @ sz).real
+    
+    E_total = omega_qumode*n_expect + omega_qubit*z_expect
+    
+    return E_total
+    
+    
+    

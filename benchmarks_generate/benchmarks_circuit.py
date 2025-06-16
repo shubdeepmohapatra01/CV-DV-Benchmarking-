@@ -109,7 +109,7 @@ def JCH_simulation_circuit_display(Nsites, Nqubits, cutoff, J, omega_r, omega_q,
     return circuit
 
 def binary_knapsack_vqe(H, ndepth, nfocks, maxiter=100, method='COBYLA', verb=0,threshold=1e-08, print_freq=10, Xvec=[]):
-    en, Xvec, int_results = bosonic_vqe_new.ecd_opt_vqe(H, ndepth, nfocks, maxiter=5000, method='BFGS',
+    en, Xvec, int_results = bosonic_vqe_new.ecd_opt_vqe(H, ndepth, nfocks, maxiter=maxiter, method='BFGS',
                                     verb=1, threshold=1e-9)
     
     return en,Xvec,int_results
@@ -141,8 +141,8 @@ def binary_knapsack_vqe_circuit(H, ndepth, nfocks,Xvec=[]):
         phi = np.random.uniform(0, np.pi, size=(ndepth, 2))
         Xvec = bosonic_vqe_new.pack_variables(beta_mag, beta_arg, theta, phi)
         
-    qmr = c2qa.QumodeRegister(num_qumodes=1, num_qubits_per_qumode=int(np.ceil(np.log2(nfocks[0]))),name = 'qmr')
-    qmr1 = c2qa.QumodeRegister(num_qumodes=1, num_qubits_per_qumode=int(np.ceil(np.log2(nfocks[1]))),name = 'qmr1')
+    qmr = c2qa.QumodeRegister(num_qumodes=1, num_qubits_per_qumode=int(np.ceil(np.log2(nfocks[0]))),name = 'qumode')
+    qmr1 = c2qa.QumodeRegister(num_qumodes=1, num_qubits_per_qumode=int(np.ceil(np.log2(nfocks[1]))),name = 'qmr')
     qbr = QuantumRegister(1,name = 'qbit')
     cr = ClassicalRegister(1)
     circuit = c2qa.CVCircuit(qmr1,qmr, qbr)
@@ -205,7 +205,7 @@ def qft_circuit(cutoff,n,ancilla,delta):
     append = 2
     delta_prime = (2*np.pi)/(2**n+ancilla+append*delta)
 
-    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))), name='qmode')
+    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))), name='qumode')
     qbr1 = QuantumRegister(n,name='qbits')
     ancilla_reg = QuantumRegister(ancilla,name = 'ancilla')
     append_reg = QuantumRegister(append, name='append')
