@@ -1,3 +1,7 @@
+import os,sys
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '..'))
+sys.path.append(PARENT_DIR)
 import c2qa
 import numpy as np
 import matplotlib.pyplot as plt

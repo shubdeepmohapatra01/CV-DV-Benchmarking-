@@ -7,7 +7,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 from  qiskit.quantum_info import DensityMatrix
 
-def collect_cvcircuit_metrics(circuit):
+def collect_cvcircuit_metrics(circuit,cutoff):
     from collections import Counter
 
     # Map each qubit to its register name
@@ -55,7 +55,7 @@ def collect_cvcircuit_metrics(circuit):
 
     return {
         "Qubits": num_qubits,
-        "Qumodes": num_qumodes,
+        "Qumodes": num_qumodes/int(np.ceil(np.log2(cutoff))),
         "Qubit Gates": gate_counts["qubit_gates"],
         "Qumode Gates": gate_counts["qumode_gates"],
         "Hybrid Gates": gate_counts["hybrid_gates"],
@@ -108,51 +108,103 @@ def plot_radar_metrics(metrics_list, labels=None, title="CV-DV Radar Chart"):
     plt.show()
     
     
-def wigner_negativity(state, axes_min=-6, axes_max=6, axes_steps=200, g=np.sqrt(2), method="clenshaw"):
-    """
-    Compute Wigner negativity from the Wigner function of a quantum state.
+from qiskit.quantum_info import partial_trace
 
-    Args:
-        state (array-like): State vector or density matrix.
-        axes_min (int): Minimum axis value for phase space.
-        axes_max (int): Maximum axis value for phase space.
-        axes_steps (int): Resolution of the phase space grid.
-        g (float): Scaling factor (default sqrt(2)).
-        method (str): Method for Wigner function calculation.
+def get_reduced_qumode_density_matrix(stateop, qumode_index, num_qumodes, cutoff):
+    num_qubits_per_qumode = int(np.ceil(np.log2(cutoff)))
+    total_qubits = stateop.num_qubits
+
+    qumode_indices = list(range(
+        qumode_index * num_qubits_per_qumode,
+        (qumode_index + 1) * num_qubits_per_qumode
+    ))
+
+    trace_indices = [i for i in range(total_qubits) if i not in qumode_indices]
+
+    return partial_trace(stateop, trace_indices)
+
+
+def get_reduced_qubit_density_matrix(stateop, qubit_index, num_qumodes, cutoff):
+    num_qubits_per_qumode = int(np.ceil(np.log2(cutoff)))
+    offset = num_qumodes * num_qubits_per_qumode
+    total_qubits = stateop.num_qubits
+
+    target_index = offset + qubit_index
+    trace_indices = [i for i in range(total_qubits) if i != target_index]
+
+    return partial_trace(stateop, trace_indices)
+
+def wigner_negativity_all_modes(stateop, num_qumodes, cutoff, axes_min=-6, axes_max=6, axes_steps=200, g=np.sqrt(2), method="clenshaw"):
+    """
+    Compute total signed Wigner function area across all qumodes.
 
     Returns:
-        float: Wigner negativity.
+        float: Average total signed Wigner area across modes.
     """
-    xvec = np.linspace(axes_min, axes_max, axes_steps)
-    W = c2qa.wigner._wigner(state, xvec, g=g, method=method)
-    
-    dx = dy = (axes_max - axes_min) / (axes_steps - 1)
-    
-    negative_volume = np.sum(np.abs(W[W < 0])) * dx * dy
-    return negative_volume
+    total_area = 0
+    for i in range(num_qumodes):
+        red_dm = get_reduced_qumode_density_matrix(stateop, i, num_qumodes, cutoff)
+        xvec = np.linspace(axes_min, axes_max, axes_steps)
+        W = c2qa.wigner._wigner(red_dm, xvec, g=g, method=method)
+        dx = dy = (axes_max - axes_min) / (axes_steps - 1)
+        area = np.sum(W) * dx * dy
+        total_area += area
 
-def truncation_cost_approximate(state,n):
-    diag_probs = np.real(np.diag(state.data))
-    tail_fraction = sum(diag_probs[-n:])  # Last n levels
-    
-    return tail_fraction
+    return total_area / num_qumodes
 
-def average_energy(circuit,stateop,cutoff,omega_qubit = 1,omega_qumode = 1):
-    state_qumode = c2qa.util.trace_out_qubits(circuit,stateop)
-    qumode_dm = DensityMatrix(state_qumode)
+def truncation_cost_all_modes(stateop, num_qumodes, cutoff, n_tail=5):
+    """
+    Compute average tail probability over qumodes.
+    """
+    total_tail = 0
+    for i in range(num_qumodes):
+        red_dm = get_reduced_qumode_density_matrix(stateop, i, num_qumodes, cutoff)
+        diag_probs = np.real(np.diag(red_dm.data))
+        tail = sum(diag_probs[-n_tail:])
+        total_tail += tail
+
+    return total_tail / num_qumodes
+
+def average_energy_all(stateop, num_qumodes, num_qubits, cutoff, omega_qumode=1.0, omega_qubit=1.0):
+    """
+    Compute total energy from multiple qumodes + qubits.
+    """
+    E = 0
+
+    for i in range(num_qumodes):
+        red_dm = get_reduced_qumode_density_matrix(stateop, i, num_qumodes, cutoff)
+        n_op = num(cutoff).full()
+        E += omega_qumode * np.trace(red_dm.data @ n_op).real
+
+    for j in range(num_qubits):
+        red_dm = get_reduced_qubit_density_matrix(stateop, j, num_qumodes, cutoff)
+        sz = np.array([[1, 0], [0, -1]])
+        E += omega_qubit * np.trace(red_dm.data @ sz).real
+
+    return E
+
+
     
-    state_qubit = c2qa.util.trace_out_qumodes(circuit,stateop)
-    qubit_dm = DensityMatrix(state_qubit)
     
-    n_op = num(cutoff).full()
-    n_expect = np.trace(qumode_dm.data @ n_op).real
-    
-    sz = np.array([[1,0],[0,-1]])
-    z_expect = np.trace(qubit_dm.data @ sz).real
-    
-    E_total = omega_qumode*n_expect + omega_qubit*z_expect
-    
-    return E_total
-    
-    
-    
+def evaluate_quantum_metrics(circuit, stateop, cutoff,num_qumodes=1,num_qubits=1, n_tail=5, omega_qubit=1.0, omega_qumode=1.0):
+    """
+    Evaluate truncation cost, Wigner total area, and average energy
+    for hybrid CV-DV circuits with multiple qumodes and qubits.
+
+    Args:
+        circuit (CVCircuit): c2qa circuit
+        stateop (Qiskit result object): full output state
+        cutoff (int): qumode cutoff
+        n_tail (int): how many highest Fock levels to include in truncation tail
+        omega_qubit (float): qubit energy prefactor
+        omega_qumode (float): qumode energy prefactor
+
+    Returns:
+        (truncation_cost, wigner_total_area, average_energy)
+    """
+
+    trunc = truncation_cost_all_modes(stateop, num_qumodes, cutoff, n_tail=n_tail)
+    wigner_area = wigner_negativity_all_modes(stateop, num_qumodes, cutoff)
+    avg_energy = average_energy_all(stateop, num_qumodes, num_qubits, cutoff, omega_qubit=omega_qubit, omega_qumode=omega_qumode)
+
+    return trunc, wigner_area, avg_energy
