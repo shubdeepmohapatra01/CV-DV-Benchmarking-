@@ -50,7 +50,7 @@ def rotation_control(cutoff,sign):
 
 def multiplication(cutoff,alpha,circuit,qumode_register,i):
     if alpha == 1:
-        return qeye(cutoff)
+        return circuit
 
     log_alpha = np.log(alpha)
     l = int(np.ceil(abs(log_alpha)))
@@ -96,15 +96,15 @@ def control_multiplication(cutoff,alpha,circuit,qumode_register,qubit_register,i
     gate2 = UnitaryGate(rotation_minus.full(), label='cR2')
     
     circuit = multiplication(cutoff,np.sqrt(alpha),circuit,qumode_register,i)
-    circuit.append(gate2, qumode_register[i])
+    circuit.append(gate2, qumode_register[i]+qubit_register[:])
     circuit = multiplication(cutoff,1/np.sqrt(alpha),circuit,qumode_register,i)
-    circuit.append(gate1, qumode_register[i])
+    circuit.append(gate1, qumode_register[i]+qubit_register[:])
     
     
     return circuit
 
 def V_alpha(cutoff,circuit,qumode_register,qubit_register,alpha):
-    circuit = multiplication(cutoff,2,circuit,qumode_register,qubit_register,2)
+    circuit = multiplication(cutoff,2,circuit,qumode_register,2)
     
     circuit = extractLSB(cutoff,circuit,qumode_register,qubit_register,0)
     
@@ -120,12 +120,12 @@ def V_alpha(cutoff,circuit,qumode_register,qubit_register,alpha):
     
     circuit = extractLSB(cutoff,circuit,qumode_register,qubit_register,2)
     
-    circuit = multiplication(cutoff,0.5,circuit,qumode_register,qubit_register,0)
+    circuit = multiplication(cutoff,0.5,circuit,qumode_register,0)
 
     return circuit
 
 def V_alpha_dag(cutoff,circuit,qumode_register,qubit_register,alpha):
-    circuit = multiplication(cutoff, 2,circuit,qumode_register,qubit_register,0)
+    circuit = multiplication(cutoff, 2,circuit,qumode_register,0)
 
     circuit = extractLSB_dag(cutoff,circuit,qumode_register,qubit_register,2)
 
@@ -141,7 +141,7 @@ def V_alpha_dag(cutoff,circuit,qumode_register,qubit_register,alpha):
 
     circuit = extractLSB_dag(cutoff,circuit,qumode_register,qubit_register,0)
 
-    circuit = multiplication(cutoff, 0.5,circuit,qumode_register,qubit_register,2)
+    circuit = multiplication(cutoff, 0.5,circuit,qumode_register,2)
     
     return circuit
 

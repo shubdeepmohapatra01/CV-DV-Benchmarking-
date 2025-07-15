@@ -26,16 +26,16 @@ def cat_state_circuit(cutoff,circuit,qbr,qmr,alpha):
     
     return circuit
 
-def gkp_state_circuit(cutoff,circuit,qbr,qmr,N_rounds=9,r=0.222):
+def gkp_state_circuit(cutoff,circuit,qbr,qmr,N_rounds=9,r=0.222,i=0):
     alpha = np.sqrt(np.pi)
-    circuit.cv_sq(r,qmr[0])
+    circuit.cv_sq(r,qmr[i])
     for k in range(1,N_rounds):
         circuit.h(qbr[0])
-        circuit.cv_c_d(alpha / np.sqrt(2),qmr[0],qbr[0])
+        circuit.cv_c_d(alpha / np.sqrt(2),qmr[i],qbr[0])
         circuit.h(qbr[0])
 
         circuit.s(qbr[0])
-        circuit.cv_c_d(1j*np.pi/(8*alpha*np.sqrt(2)),qmr[0],qbr[0])
+        circuit.cv_c_d(1j*np.pi/(8*alpha*np.sqrt(2)),qmr[i],qbr[0])
         circuit.h(qbr[0])
         circuit.h(qbr[0])
         circuit.sdg(qbr[0])
@@ -70,11 +70,11 @@ def apply_basis_transformation_reverse(circuit, qbr1):
 
 def state_transfer_CVtoDV(cutoff,circuit,qmr,qbr,cr,n,lmbda=0.29):
     for j in range(1,n+1):
-        V_j = state_transfer.Vj(lmbda,j,4,cutoff)
+        V_j = state_transfer.Vj(lmbda,j,n,cutoff)
         gate1 = UnitaryGate(V_j.full(), label=f'V{j}')
         circuit.append(gate1, qmr[:] + qbr[:])  # adding custom gate : Conditional displacement in p direction
         
-        W_j = state_transfer.Wj(lmbda,j,4,cutoff)
+        W_j = state_transfer.Wj(lmbda,j,n,cutoff)
         gate1 = UnitaryGate(W_j.full(), label=f'W{j}')
         circuit.append(gate1, qmr[:] + qbr[:])  # adding custom gate : Conditional displacement in x direction
         
@@ -88,11 +88,11 @@ def state_transfer_CVtoDV(cutoff,circuit,qmr,qbr,cr,n,lmbda=0.29):
 
 def state_transfer_DVtoCV(cutoff,circuit,qmr,qbr,cr,n,lmbda=0.29):
     for j in range(n+1,0,-1):
-        W_j = state_transfer.Wj(lmbda,j,4,cutoff)
+        W_j = state_transfer.Wj(lmbda,j,n,cutoff)
         gate1 = UnitaryGate(W_j.full(), label=f'W{j}')
         circuit.append(gate1, qmr[:] + qbr[:])  # adding custom gate : Conditional displacement in x direction 
         
-        V_j = state_transfer.Vj(lmbda,j,4,cutoff)
+        V_j = state_transfer.Vj(lmbda,j,n,cutoff)
         gate1 = UnitaryGate(V_j.full(), label=f'V{j}')
         circuit.append(gate1, qmr[:] + qbr[:])  # adding custom gate : Conditional displacement in p direction
         
@@ -162,100 +162,85 @@ def shors_circuit(N, m, R, a, delta, cutoff):
     cr = ClassicalRegister(1)
     circuit = c2qa.CVCircuit(qmr1, qbr, cr)
     
-    circuit = gkp_state_circuit(cutoff,circuit,qbr,qmr1[0])
-    circuit = gkp_state_circuit(cutoff,circuit,qbr,qmr1[1])
+    circuit = gkp_state_circuit(cutoff,circuit,qbr,qmr1,i=0)
+    circuit = gkp_state_circuit(cutoff,circuit,qbr,qmr1,i=1)
     circuit.cv_sq(-np.log(delta), qmr1[2])
     
     circuit = shors_bq.translation_R(cutoff,R,circuit,qmr1,0)
-    circuit = shors_bq.multiplication(cutoff,N,qmr1,1)
+    circuit = shors_bq.multiplication(cutoff,N,circuit,qmr1,1)
     circuit = shors_bq.U_aNm(cutoff, circuit, qmr1, qbr, a, N, m)
 
     return circuit
 
-def apply_basis_transformation_qft(circuit, combined_register):
-    num_qubits = len(combined_register)
-    for i in range(num_qubits):
-        circuit.h(combined_register[i])
-        if i == num_qubits-1:  # MSB
-            circuit.x(combined_register[i])
-            circuit.z(combined_register[i])
-        elif i == 0:  # LSB
-            circuit.z(combined_register[i])
-        else:  # Middle qubits
-            circuit.x(combined_register[i])
-            
-    for i in range(num_qubits // 2):
-        circuit.swap(combined_register[i], combined_register[num_qubits - i - 1])
 
-def apply_reverse_basis_transformation_qft(circuit, combined_register):
-    num_qubits = len(combined_register)
-    
-    for i in range(num_qubits // 2):
-        circuit.swap(combined_register[i], combined_register[num_qubits - i - 1])
-    
-    for i in range(num_qubits):
-        if i == 0:  # LSB
-            circuit.z(combined_register[i])
-            circuit.h(combined_register[i])
-        elif i == num_qubits-1:  # MSB
-            circuit.z(combined_register[i])
-            circuit.x(combined_register[i])
-            circuit.h(combined_register[i])
-        else:  # Middle qubits
-            circuit.x(combined_register[i])
-            circuit.h(combined_register[i])
+def state_transfer_CVtoDV_qft(cutoff,circuit,qmr,qbr,cr,n,lmbda=0.29):
+    for j in range(1,n+1):
+        V_j = state_transfer.Vj(lmbda,j,n,cutoff)
+        gate1 = UnitaryGate(V_j.full(), label=f'V{j}')
+        circuit.append(gate1, qmr[:] + qbr[:])  # adding custom gate : Conditional displacement in p direction
+        print(V_j.shape)
+        W_j = state_transfer.Wj(lmbda,j,n,cutoff)
+        gate1 = UnitaryGate(W_j.full(), label=f'W{j}')
+        circuit.append(gate1, qmr[:] + qbr[:])  # adding custom gate : Conditional displacement in x direction
+        
+    return circuit
 
-def qft_circuit(cutoff,n,ancilla,delta):
-    append = 2
-    delta_prime = (2*np.pi)/(2**n+ancilla+append*delta)
+def state_transfer_DVtoCV_qft(cutoff,circuit,qmr,qbr,cr,n,lmbda=0.29):
+    for j in range(n,0,-1):
+        W_j = state_transfer.Wj(lmbda,j,n,cutoff)
+        print(W_j.shape)
+        gate1 = UnitaryGate(W_j.full(), label=f'W{j}')
+        circuit.append(gate1, qmr[:] + qbr[:])  # adding custom gate : Conditional displacement in x direction 
+        
+        V_j = state_transfer.Vj(lmbda,j,n,cutoff)
+        gate1 = UnitaryGate(V_j.full(), label=f'V{j}')
+        circuit.append(gate1, qmr[:] + qbr[:])  # adding custom gate : Conditional displacement in p direction
+        
+    return circuit
 
+def qft_circuit(cutoff,delta, n, a, append):
+    total = n + a + append
     qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))), name='qumode')
-    qbr1 = QuantumRegister(n,name='qbits')
-    ancilla_reg = QuantumRegister(ancilla,name = 'ancilla')
+    qbr1 = QuantumRegister(n, name='qbits')
     append_reg = QuantumRegister(append, name='append')
-    cr1 = ClassicalRegister(1, name='creg')
-    circuit = c2qa.CVCircuit(qmr, append_reg, qbr1, ancilla_reg, cr1)
+    ancilla_reg = QuantumRegister(a, name='ancilla')
+    creg = ClassicalRegister(n, name='creg') 
+    
+    circuit = c2qa.CVCircuit(qmr, ancilla_reg, qbr1, append_reg, creg)
 
-    total_register = append_reg[:]+ qbr1[:] + ancilla_reg[:]
+    for q in ancilla_reg:
+        circuit.h(q)
 
-    # Initialization
+    total_reg = ancilla_reg[:] + qbr1[:] + append_reg[:]  # MSB to LSB
+    reversed_reg = list(reversed(total_reg))             
 
-    # circuit.h(qbr1[0])
-    circuit.barrier()
+    circuit.z(reversed_reg[0])
+    circuit.z(reversed_reg[-1])
 
-    # Basis transformation
-    apply_basis_transformation_qft(circuit, total_register)
+    circuit.h(reversed_reg[-1])
 
-    circuit.barrier()
+    for q in reversed_reg[:-1]:
+        circuit.x(q)
+        circuit.h(q)
 
-    # CV gates
-    circuit = state_transfer_DVtoCV(cutoff,circuit,qmr,total_register,cr1,n+ancilla+append,delta)
+    state_transfer_DVtoCV_qft(cutoff, circuit, qmr, total_reg, creg, total)
+
+    delta_prime = (2*np.pi) / (2**total * delta)
     circuit.cv_d(delta / 2, qmr[0])
-
-    circuit.cv_r(np.pi/2,qmr[0])
-
+    circuit.cv_r(np.pi / 2, qmr[0])
     circuit.cv_d(-delta_prime / 2, qmr[0])
 
-    circuit = state_transfer_CVtoDV(cutoff,circuit,qmr,total_register,cr1,n+ancilla+append,delta)
+    state_transfer_CVtoDV_qft(cutoff, circuit, qmr, total_reg, creg, total)
 
-    circuit.barrier()
+    for q in reversed_reg[:-1]:
+        circuit.h(q)
+        circuit.x(q)
+    circuit.h(reversed_reg[-1])
+    circuit.z(reversed_reg[0])
+    circuit.z(reversed_reg[-1])
 
-    # Reverse basis transformation
-    apply_reverse_basis_transformation_qft(circuit, total_register)
-
-    circuit.barrier()
-
-    # Measurements
-    # for i, qubit in enumerate(total_register):
-    #     if(i == 0 or i ==1):
-    #         continue
-    #     if(i>1 and i<=n+1):
-    #         circuit.measure(qubit, cr1[-(i + 1)])
-    # circuit.measure(ancilla_reg[1], cr1[0])
-    # circuit.measure(append_reg[0], cr1[0])
+    start_index = a  
+    for i in range(n):
+        circuit.measure(total_reg[start_index + i], creg[i])
 
     return circuit
-        
-        
-        
-        

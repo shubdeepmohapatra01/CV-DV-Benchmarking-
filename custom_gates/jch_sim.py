@@ -63,7 +63,7 @@ def createCircuit(Nsites, Nqubits, cutoff, J, omega_r, omega_q, g, tau,display_c
     return circuit_to_gate(circuit, label='U')
 
 def circuit_display(Nsites, Nqubits, cutoff, J, omega_r, omega_q, g, tau,timesteps,display_circuit = False):
-    qmr = c2qa.QumodeRegister(num_qumodes=Nsites, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))))
+    qmr = c2qa.QumodeRegister(num_qumodes=Nsites, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))),name = 'qumode')
     qbr = QuantumRegister(Nqubits)
     circuit = c2qa.CVCircuit(qmr, qbr)
     
