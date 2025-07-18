@@ -141,16 +141,18 @@ def wigner_negativity_all_modes(stateop, num_qumodes, cutoff, axes_min=-6, axes_
     Returns:
         float: Average total signed Wigner area across modes.
     """
-    total_area = 0
+    total_negativity = 0
     for i in range(num_qumodes):
         red_dm = get_reduced_qumode_density_matrix(stateop, i, num_qumodes, cutoff)
         xvec = np.linspace(axes_min, axes_max, axes_steps)
         W = c2qa.wigner._wigner(red_dm, xvec, g=g, method=method)
         dx = dy = (axes_max - axes_min) / (axes_steps - 1)
-        area = np.sum(W) * dx * dy
-        total_area += area
+        abs_area = np.sum(np.abs(W)) * dx * dy
+        
+        negativity = abs_area - 1.0  # Normalized Wigner has integral = 1
+        total_negativity += negativity
 
-    return total_area / num_qumodes
+    return total_negativity / num_qumodes
 
 def truncation_cost_all_modes(stateop, num_qumodes, cutoff, n_tail=5):
     """

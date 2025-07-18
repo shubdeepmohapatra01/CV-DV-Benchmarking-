@@ -2,90 +2,102 @@ import os, sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
-from qiskit import QuantumRegister,ClassicalRegister
-from qiskit.quantum_info import DensityMatrix
+from qiskit import QuantumRegister, ClassicalRegister
 from qutip import *
 
 from benchmarks_circuit import (
     cat_state_circuit, gkp_state_circuit, JCH_simulation_circuit_display,
-    binary_knapsack_vqe, binary_knapsack_vqe_circuit, shors_circuit,qft_circuit,state_transfer_CVtoDV
+    binary_knapsack_vqe, binary_knapsack_vqe_circuit, shors_circuit, qft_circuit, state_transfer_CVtoDV
 )
 from features import (
-    collect_cvcircuit_metrics, evaluate_quantum_metrics, 
-    wigner_negativity_all_modes, truncation_cost_all_modes, average_energy_all
+    collect_cvcircuit_metrics, evaluate_quantum_metrics,
 )
 
 from custom_gates import bosonic_vqe
 
+import c2qa
+
+# --------------------------- Config ---------------------------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "circuit_characters")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-STRUCTURAL_KEYS = ['Qubits', 'Qumodes', 'Qubit Gates', 'Qumode Gates', 'Total Gates']
-PERFORMANCE_KEYS = ['Hybrid Gates', 'Truncation Cost', 'Wigner Negativity', 'Average Energy']
+STRUCTURAL_KEYS = ['Qubits', 'Qumodes', 'Qubit Gates', 'Qumode Gates', 'Hybrid Gates', 'Total Gates']
+PERFORMANCE_KEYS = ['Truncation Cost', 'Wigner Negativity', 'Average Energy']
 
+# ---------------- Radar Plot ----------------
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
+def plot_radar_group(metrics_dict, keys, filename):
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle
+    import numpy as np
 
-def plot_radar_group(metrics, keys, label, filename, color_idx=0):
-    N = len(keys)
-    angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
-    angles += angles[:1]
+    num_plots = len(metrics_dict)
+    rows = 2
+    cols = (num_plots + 1) // 2
 
-    raw_vals = [metrics.get(k, 0) for k in keys]
-    raw_vals += raw_vals[:1]
-
-    max_vals = max(raw_vals)
-    max_radius = max_vals * 1.2 if max_vals != 0 else 1.0
-
-    color = plt.cm.tab10(color_idx % 10)
-
-    # Larger plot area
-    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+    fig, axs = plt.subplots(rows, cols, subplot_kw=dict(polar=True), figsize=(4.2 * cols, 4.2 * rows))
     fig.patch.set_facecolor('white')
-    ax.set_facecolor("#f9f9f9")
+    axs = axs.flatten()
 
-    # Axis and grid setup
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(keys, fontsize=10, color="#333333")
-    ax.set_yticks([])
-    ax.set_ylim(0, max_radius)
-    ax.grid(color="gray", linestyle="--", linewidth=0.6)
-    ax.spines['polar'].set_visible(False)
+    for idx, (label, metrics) in enumerate(metrics_dict.items()):
+        ax = axs[idx]
+        N = len(keys)
+        angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
+        angles += angles[:1]
 
-    # Larger radial grid circles
-    for radius in np.linspace(0.2, 1.0, 5) * max_radius:
-        ax.add_patch(Circle((0, 0), radius, transform=ax.transData._b,
-                            color='gray', alpha=0.06, zorder=0))
+        raw_vals = [metrics.get(k, 0) for k in keys]
+        raw_vals += raw_vals[:1]
 
-    # Radar plot line and fill
-    ax.plot(angles, raw_vals, linewidth=2, color=color, label=label)
-    ax.fill(angles, raw_vals, color=color, alpha=0.3)
+        max_vals = max(raw_vals)
+        max_radius = max_vals * 1.2 if max_vals != 0 else 1.0  # smaller radius for plot
 
-    # Bold value annotations inside plot
-    for j in range(N):
-        angle = angles[j]
-        r = raw_vals[j]
-        ax.text(angle, r + 0.05 * max_radius, f"{r:.2f}",
-                ha='center', va='center', fontsize=12, fontweight='bold', color="#222222")
+        color = plt.cm.tab10(idx % 10)
 
-    # Smaller title
-    ax.set_title(label, fontsize=13, pad=30, color=color, weight='bold')
+        # Background and labels
+        ax.set_facecolor("#f9f9f9")
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(keys, fontsize=14, color="#222222", fontweight='medium')
+        ax.set_yticks([])
+        ax.set_ylim(0, max_radius)
+        ax.grid(color="gray", linestyle="--", linewidth=0.5)
+        ax.spines['polar'].set_visible(False)
 
-    # Move legend completely off the plot
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.05), fontsize=9, frameon=False)
+        # Faint concentric rings
+        for radius in np.linspace(0.2, 1.0, 4) * max_radius:
+            ax.add_patch(Circle((0, 0), radius, transform=ax.transData._b,
+                                color=color, alpha=0.03, zorder=0))
 
-    # Save with space for everything
-    plt.tight_layout(rect=[0, 0, 0.9, 0.95])
+        # Plot + fill
+        ax.plot(angles, raw_vals, linewidth=1.8, color=color, label=label)
+        ax.fill(angles, raw_vals, color=color, alpha=0.25)
+
+        # Annotate points
+        for j in range(N):
+            angle = angles[j]
+            r = raw_vals[j]
+            val = raw_vals[j]
+            # Choose integer formatting for structural values
+            if isinstance(val, int) or (val == int(val) and keys[j].lower().startswith(("qubit", "qumode", "depth", "gate"))):
+                val_str = f"{int(val)}"
+            else:
+                val_str = f"{val:.2f}"
+            ax.text(angle, r + 0.1 * max_radius, val_str,
+                    ha='center', va='center', fontsize=12, color="#111111", fontweight='semibold')
+
+        ax.set_title(label, fontsize=16, pad=24, color=color, weight='bold')
+
+    # Hide unused subplots
+    for i in range(len(metrics_dict), len(axs)):
+        fig.delaxes(axs[i])
+
+    plt.tight_layout()
     plt.savefig(filename, dpi=300, bbox_inches='tight')
     plt.close()
-    print(f"[{label}] Radar chart saved to {filename}")
+    print(f"Radar chart saved to {filename}")
 
-   
-def average_over_timesteps(circuit_template, U1, qmr, qbr, cutoff, steps, dt,num_qumodes,num_qubits, sample_every=5):
-    import c2qa
+# ---------------- Evaluation Helpers ----------------
+def average_over_timesteps(circuit_template, U1, qmr, qbr, cutoff, steps, dt, num_qumodes, num_qubits, sample_every=5):
     trunc_costs, wigner_negs, energies = [], [], []
     circuit = circuit_template.copy()
 
@@ -93,7 +105,7 @@ def average_over_timesteps(circuit_template, U1, qmr, qbr, cutoff, steps, dt,num
         circuit.append(U1, qmr[:] + qbr[:])
         if i % sample_every == 0:
             state, _, _ = c2qa.util.simulate(circuit)
-            trunc, wneg, energy = evaluate_quantum_metrics(circuit, state, cutoff,num_qumodes,num_qubits)
+            trunc, wneg, energy = evaluate_quantum_metrics(circuit, state, cutoff, num_qumodes, num_qubits)
             trunc_costs.append(trunc)
             wigner_negs.append(wneg)
             energies.append(energy)
@@ -104,119 +116,115 @@ def average_over_timesteps(circuit_template, U1, qmr, qbr, cutoff, steps, dt,num
         "Average Energy": np.mean(energies)
     }
 
-
-def characterize_circuit(name, circuit, cutoff,num_qubits=1,num_qumodes=1, stateop=None):
+def characterize_circuit(name, circuit, cutoff, num_qubits=1, num_qumodes=1, stateop=None):
     metrics = collect_cvcircuit_metrics(circuit, cutoff)
-
     if stateop is not None:
-        trunc, wneg, energy = evaluate_quantum_metrics(circuit, stateop, cutoff,num_qumodes,num_qubits)
+        trunc, wneg, energy = evaluate_quantum_metrics(circuit, stateop, cutoff, num_qumodes, num_qubits)
         metrics.update({
             "Truncation Cost": trunc,
             "Wigner Negativity": wneg,
             "Average Energy": energy
         })
-
     return metrics
 
-
+# ---------------- Main ----------------
 def main():
-    import c2qa
-    from scipy.sparse import identity
+    cutoff = 64
+    struct_all = {}
+    perf_all = {}
 
-    cutoff = 2**6
-    color_idx = 0
-    
-    # --- Sate Transfer state ---
-    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))),name='qumode')
+    # --- State Transfer ---
+    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6, name='qumode')
     qbr = QuantumRegister(4)
     cr = ClassicalRegister(4)
     circuit = c2qa.CVCircuit(qmr, qbr, cr)
-    circuit = state_transfer_CVtoDV(cutoff,circuit,qmr,qbr,cr,4)
+    circuit = state_transfer_CVtoDV(cutoff, circuit, qmr, qbr, cr, 4)
     state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("StateTransferCVtoDV", circuit, cutoff,stateop = state)
-    plot_radar_group(metrics, STRUCTURAL_KEYS, "CV to DV State Transfer( Structure)", os.path.join(OUTPUT_DIR, "cvtodv_struct.png"), color_idx)
-    plot_radar_group(metrics, PERFORMANCE_KEYS, "CV to DV State Transfer (Quantum)", os.path.join(OUTPUT_DIR, "cvtodv_quantum.png"), color_idx)
-    color_idx += 1
+    metrics = characterize_circuit("StateTransferCVtoDV", circuit, cutoff, 4, 1, state)
+    struct_all["StateTransferCVtoDV"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+    perf_all["StateTransferCVtoDV"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
 
-    # --- Cat state ---
-    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))),name='qumode')
+    # --- Cat State ---
+    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6, name='qumode')
     qbr = QuantumRegister(1)
     circuit = c2qa.CVCircuit(qmr, qbr)
     circuit = cat_state_circuit(cutoff, circuit, qbr, qmr, alpha=4)
     state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("Cat State", circuit, cutoff,stateop = state)
-    plot_radar_group(metrics, STRUCTURAL_KEYS, "Cat State (Structure)", os.path.join(OUTPUT_DIR, "cat_struct.png"), color_idx)
-    plot_radar_group(metrics, PERFORMANCE_KEYS, "Cat State (Quantum)", os.path.join(OUTPUT_DIR, "cat_quantum.png"), color_idx)
-    color_idx += 1
+    metrics = characterize_circuit("Cat State", circuit, cutoff, 1, 1, state)
+    struct_all["Cat State"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+    perf_all["Cat State"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
 
-    # --- GKP state ---
-    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))),name='qumode')
+    # --- GKP State ---
+    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6, name='qumode')
     qbr = QuantumRegister(1)
     circuit = c2qa.CVCircuit(qmr, qbr)
     circuit = gkp_state_circuit(cutoff, circuit, qbr, qmr)
     state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("GKP State", circuit, cutoff,stateop = state)
-    plot_radar_group(metrics, STRUCTURAL_KEYS, "GKP State (Structure)", os.path.join(OUTPUT_DIR, "gkp_struct.png"), color_idx)
-    plot_radar_group(metrics, PERFORMANCE_KEYS, "GKP State (Quantum)", os.path.join(OUTPUT_DIR, "gkp_quantum.png"), color_idx)
-    color_idx += 1
-    
-    # ---QFT---
-    cutoff = 16
-    circuit = qft_circuit(16,1.1, 2, 1, 2)
-    state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("QFT Circuit", circuit, cutoff,stateop = state)
-    plot_radar_group(metrics, STRUCTURAL_KEYS, "QFT Circuit (Structure)", os.path.join(OUTPUT_DIR, "qft_struct.png"), color_idx)
-    plot_radar_group(metrics, PERFORMANCE_KEYS, "QFT Circuit (Quantum)", os.path.join(OUTPUT_DIR, "qft_quantum.png"), color_idx)
-    color_idx += 1
+    metrics = characterize_circuit("GKP State", circuit, cutoff, 1, 1, state)
+    struct_all["GKP State"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+    perf_all["GKP State"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
 
-    # --- JCH Simulation ---
-    cutoff = 2**2
+    # --- QFT Circuit ---
+    circuit = qft_circuit(16, 1.1, 2, 1, 2)
+    state, _, _ = c2qa.util.simulate(circuit)
+    metrics = characterize_circuit("QFT Circuit", circuit, 16, 2, 1, state)
+    struct_all["QFT Circuit"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+    perf_all["QFT Circuit"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+
+    # --- JCH Circuit ---
+    cutoff = 4
     Nsites = 3
-    qmr = c2qa.QumodeRegister(Nsites, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))),name='qumode')
+    qmr = c2qa.QumodeRegister(Nsites, num_qubits_per_qumode=2)
     qbr = QuantumRegister(Nsites)
     circuit_template = c2qa.CVCircuit(qmr, qbr)
     circuit_template.cv_initialize(2, qmr[0])
-    U1 = JCH_simulation_circuit_display(Nsites, Nqubits=Nsites, cutoff=cutoff, J=0.1,
-                                        omega_r=2 * np.pi * 2, omega_q=2 * np.pi * 3,
-                                        g=2 * np.pi * 0.5, tau=0.1, timesteps=1)
-    jch_metrics = average_over_timesteps(circuit_template, U1, qmr, qbr, cutoff, steps=50, dt=0.1,num_qumodes=Nsites,num_qubits=Nsites)
-    circuit = JCH_simulation_circuit_display(Nsites, Nqubits=Nsites, cutoff=cutoff, J=0.1,
-                                        omega_r=2 * np.pi * 2, omega_q=2 * np.pi * 3,
-                                        g=2 * np.pi * 0.5, tau=0.1, timesteps=1)
-    struct_metrics = collect_cvcircuit_metrics(circuit, cutoff)
-    struct_metrics.update(jch_metrics)
-    plot_radar_group(struct_metrics, STRUCTURAL_KEYS, f"JCH N={Nsites} (Structure)", os.path.join(OUTPUT_DIR, "jch_struct.png"), color_idx)
-    plot_radar_group(struct_metrics, PERFORMANCE_KEYS, f"JCH N={Nsites} (Quantum)", os.path.join(OUTPUT_DIR, "jch_quantum.png"), color_idx)
-    color_idx += 1
+    U1 = JCH_simulation_circuit_display(Nsites, Nqubits=Nsites, cutoff=cutoff,
+                                        J=0.1, omega_r=2*np.pi*2, omega_q=2*np.pi*3,
+                                        g=2*np.pi*0.5, tau=0.1, timesteps=1)
+    perf = average_over_timesteps(circuit_template, U1, qmr, qbr, cutoff, steps=50, dt=0.1, num_qumodes=Nsites, num_qubits=Nsites)
+    circuit = JCH_simulation_circuit_display(Nsites, Nqubits=Nsites, cutoff=cutoff,
+                                        J=0.1, omega_r=2*np.pi*2, omega_q=2*np.pi*3,
+                                        g=2*np.pi*0.5, tau=0.1, timesteps=1)
+    struct = collect_cvcircuit_metrics(circuit, cutoff)
+    struct_all[f"JCH N={Nsites}"] = {k: struct[k] for k in STRUCTURAL_KEYS}
+    perf_all[f"JCH N={Nsites}"] = perf
 
-    # --- VQE Benchmark ---
-    values = [1, 4, 5, 10]
-    weights = [2.5, 1, 2, 3]
-    max_weight = 7
-    max_weight = 7
-    l_val = 3
-    nfocks = [8,8]
-    ndepth = 5
-
-    bkp_fun1, bkp_list1 = bosonic_vqe.binary_knapsack_ham(l_val, values, weights, max_weight)
-    bkp_list1 = bosonic_vqe.binary_to_pauli_list(bkp_fun1, bkp_list1)
-    bkp_ham1 = Qobj( bosonic_vqe.qubit_op_to_ham(bkp_list1).full() )
-    en, Xvec, int_results = binary_knapsack_vqe(bkp_ham1, ndepth, nfocks,  maxiter=250, method='BFGS',
-                                    verb=1, threshold=1e-6)
-    vqe_circuit = binary_knapsack_vqe_circuit(bkp_ham1,ndepth,nfocks,Xvec)
-    state, _, _ = c2qa.util.simulate(vqe_circuit)
-    vqe_metrics = characterize_circuit(f"VQE depth={ndepth}", vqe_circuit, 8, state)
-    plot_radar_group(vqe_metrics, STRUCTURAL_KEYS, "VQE (Structure)", os.path.join(OUTPUT_DIR, "vqe_struct.png"), color_idx)
-    plot_radar_group(vqe_metrics, PERFORMANCE_KEYS, "VQE (Quantum)", os.path.join(OUTPUT_DIR, "vqe_quantum.png"), color_idx)
-    
-    # --- SHORS Benchmark ---
-    circuit = shors_circuit(15,2,15,2,0.222,64)
+    # --- Shor's Circuit ---
+    cutoff = 64
+    circuit = shors_circuit(15, 2, 15, 2, 0.222, cutoff)
     state, _, _ = c2qa.util.simulate(circuit)
-    shors_metrics = characterize_circuit("Shors Circuit", circuit, cutoff,stateop = state)
-    plot_radar_group(metrics, STRUCTURAL_KEYS, "Shor's Circuit (Structure)", os.path.join(OUTPUT_DIR, "shors_struct.png"), color_idx)
-    plot_radar_group(metrics, PERFORMANCE_KEYS, "Shor'S Circuit (Quantum)", os.path.join(OUTPUT_DIR, "shors_quantum.png"), color_idx)
-    color_idx += 1
-    
+    metrics = characterize_circuit("Shors Circuit", circuit, cutoff, 2, 2, state)
+    struct_all["Shor's Circuit"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+    perf_all["Shor's Circuit"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+
+    # ---- Plot All Summary Charts ----
+    plot_radar_group(struct_all, STRUCTURAL_KEYS, os.path.join(OUTPUT_DIR, "summary_structural.png"))
+    plot_radar_group(perf_all, PERFORMANCE_KEYS, os.path.join(OUTPUT_DIR, "summary_quantum.png"))
 
 if __name__ == "__main__":
     main()
+
+    
+    
+    
+    
+    
+# # --- VQE Benchmark ---
+    # values = [1, 4, 5, 10]
+    # weights = [2.5, 1, 2, 3]
+    # max_weight = 7
+    # max_weight = 7
+    # l_val = 3
+    # nfocks = [8,8]
+    # ndepth = 5
+
+    # bkp_fun1, bkp_list1 = bosonic_vqe.binary_knapsack_ham(l_val, values, weights, max_weight)
+    # bkp_list1 = bosonic_vqe.binary_to_pauli_list(bkp_fun1, bkp_list1)
+    # bkp_ham1 = Qobj( bosonic_vqe.qubit_op_to_ham(bkp_list1).full() )
+    # en, Xvec, int_results = binary_knapsack_vqe(bkp_ham1, ndepth, nfocks,  maxiter=250, method='BFGS',
+    #                                 verb=1, threshold=1e-6)
+    # vqe_circuit = binary_knapsack_vqe_circuit(bkp_ham1,ndepth,nfocks,Xvec)
+    # state, _, _ = c2qa.util.simulate(vqe_circuit)
+    # vqe_metrics = characterize_circuit(f"VQE depth={ndepth}", vqe_circuit, 8, state)
+    # plot_radar_group(vqe_metrics, STRUCTURAL_KEYS, "VQE (Structure)", os.path.join(OUTPUT_DIR, "vqe_struct.png"), color_idx)
+    # plot_radar_group(vqe_metrics, PERFORMANCE_KEYS, "VQE (Quantum)", os.path.join(OUTPUT_DIR, "vqe_quantum.png"), color_idx)
