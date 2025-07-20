@@ -19,7 +19,7 @@ def cat_state_circuit(cutoff,circuit,qbr,qmr,alpha):
     circuit.cv_c_d(alpha / np.sqrt(2),qmr[0],qbr[0])
     circuit.h(qbr[0])
 
-    circuit.s(qbr[0])
+    circuit.sdg(qbr[0])
     circuit.h(qbr[0])
     circuit.cv_c_d(1j*np.pi/(8*alpha*np.sqrt(2)),qmr[0],qbr[0])
     circuit.h(qbr[0])
@@ -35,11 +35,11 @@ def gkp_state_circuit(cutoff,circuit,qbr,qmr,N_rounds=9,r=0.222,i=0):
         circuit.cv_c_d(alpha / np.sqrt(2),qmr[i],qbr[0])
         circuit.h(qbr[0])
 
-        circuit.s(qbr[0])
+        circuit.sdg(qbr[0])
+        circuit.h(qbr[0])
         circuit.cv_c_d(1j*np.pi/(8*alpha*np.sqrt(2)),qmr[i],qbr[0])
         circuit.h(qbr[0])
-        circuit.h(qbr[0])
-        circuit.sdg(qbr[0])
+        circuit.s(qbr[0])
         
     return circuit
 
