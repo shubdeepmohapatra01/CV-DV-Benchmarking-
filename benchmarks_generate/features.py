@@ -134,23 +134,23 @@ def get_reduced_qubit_density_matrix(stateop, qubit_index, num_qumodes, cutoff):
 
     return partial_trace(stateop, trace_indices)
 
-def wigner_negativity_all_modes(stateop, num_qumodes, cutoff, axes_min=-6, axes_max=6, axes_steps=200, g=np.sqrt(2), method="clenshaw"):
-    """
-    Compute total signed Wigner function area across all qumodes.
-
-    Returns:
-        float: Average total signed Wigner area across modes.
-    """
+def wigner_negativity_all_modes(stateop, num_qumodes, cutoff, axes_min=-6, axes_max=6, axes_steps=500, g=np.sqrt(2), method="clenshaw"):
     total_negativity = 0
     for i in range(num_qumodes):
         red_dm = get_reduced_qumode_density_matrix(stateop, i, num_qumodes, cutoff)
         xvec = np.linspace(axes_min, axes_max, axes_steps)
         W = c2qa.wigner._wigner(red_dm, xvec, g=g, method=method)
+
         dx = dy = (axes_max - axes_min) / (axes_steps - 1)
+        area = np.sum(W) * dx * dy
+        W /= area  # Normalize so ∫W = 1
         abs_area = np.sum(np.abs(W)) * dx * dy
-        
-        negativity = abs_area - 1.0  # Normalized Wigner has integral = 1
+
+        negativity = 0.5 * (abs_area - 1.0)
+        negativity = min(max(negativity, 0), 1)
         total_negativity += negativity
+
+        print(f"Mode {i}: ∫W = 1.000, ∫|W| = {abs_area:.3f}, Negativity = {negativity:.3f}")
 
     return total_negativity / num_qumodes
 

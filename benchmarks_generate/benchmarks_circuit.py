@@ -11,7 +11,8 @@ from qiskit.converters import circuit_to_gate
 from qutip import *
 from qiskit.circuit import Parameter
 from qiskit.circuit.library import UnitaryGate
-from custom_gates import state_generation,state_transfer,jch_sim,bosonic_vqe_new,shors_bq
+from custom_gates import state_generation,state_transfer,jch_sim,bosonic_vqe_new,shors_bq,bosonic_qaoa
+from scipy.optimize import minimize
 
 def cat_state_circuit(cutoff,circuit,qbr,qmr,alpha):
     circuit.h(qbr[0])
@@ -154,6 +155,48 @@ def binary_knapsack_vqe_circuit(H, ndepth, nfocks,Xvec=[]):
     beta_mag, beta_arg, theta, phi = bosonic_vqe_new.unpack_variables(Xvec, ndepth)
     circuit = bosonic_vqe_new.ecd_rot_ansatz(beta_mag, beta_arg, theta, phi, nfocks,circuit,qmr,qmr1,qbr)
     
+    return circuit
+
+def cv_qaoa(cutoff,s,a,p,n,maxiter=100,method = 'SLSQP'):
+    costval = []
+    estval = []
+    
+    def cost_function(params):
+        return bosonic_qaoa.cvQAOA(params, cutoff, p, s, n, a, costval, estval)
+    
+    initial_params = np.random.uniform(0, 2 * np.pi, size=2 * p)
+
+    result = minimize(
+        cost_function,
+        initial_params,   
+        method=method,
+        tol=1e-6,
+        options={'maxiter': 100}
+    )
+    
+    return result
+    
+def cv_qaoa_circuit(params,cutoff,s,a,p,n):
+    gamma_list = params[:p] 
+    eta_list = params[p:]  
+
+    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=int(np.ceil(np.log2(cutoff))),name= 'qumode')
+    cr = ClassicalRegister(1)
+    circuit = c2qa.CVCircuit(qmr, cr)
+
+    circuit.cv_initialize(0, qmr[0])       # vacuum
+    circuit.cv_sq(-s, qmr[0])              # squeezing gate
+
+    # QAOA unitaries
+    for i in range(p):
+        costH = bosonic_qaoa.cost(cutoff, a, n, eta_list[i])
+        cost_gate = UnitaryGate(costH.full(), label=f'Uc_{eta_list[i]}')
+        circuit.append(cost_gate, qmr[0])
+
+        mixH = bosonic_qaoa.kinetic_mixer(cutoff, gamma_list[i])
+        mixer_gate = UnitaryGate(mixH.full(), label=f'Um_{gamma_list[i]}')
+        circuit.append(mixer_gate, qmr[0])
+        
     return circuit
 
 def shors_circuit(N, m, R, a, delta, cutoff):
