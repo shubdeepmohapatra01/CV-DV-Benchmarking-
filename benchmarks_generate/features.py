@@ -30,6 +30,7 @@ def collect_cvcircuit_metrics(circuit,cutoff):
     # Count qubits and qumodes by number of *registers*, not physical bits
     num_qubits = sum(len(reg) for reg in qubit_regs)
     num_qumodes = sum(len(reg) for reg in qumode_regs)  # Each reg element is one qumode
+    circuit_depth = circuit.depth()
 
     gate_counts = Counter()
     skip_instrs = {'barrier', 'measure', 'initialize', 'snapshot', 'delay'}
@@ -59,7 +60,7 @@ def collect_cvcircuit_metrics(circuit,cutoff):
         "Qubit Gates": gate_counts["qubit_gates"],
         "Qumode Gates": gate_counts["qumode_gates"],
         "Hybrid Gates": gate_counts["hybrid_gates"],
-        "Total Gates": sum(gate_counts.values())
+        "Circuit Depth": circuit_depth
     }
 
     

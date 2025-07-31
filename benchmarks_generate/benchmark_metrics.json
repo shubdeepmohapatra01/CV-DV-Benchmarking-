@@ -1,0 +1,122 @@
+{
+ "StateTransferCVtoDV": {
+    "structural": {
+      "Qubits": 4,
+      "Qumodes": 1,
+      "Qubit Gates": 9,
+      "Qumode Gates": 0,
+      "Hybrid Gates": 8,
+      "Circuit Depth": 12
+    },
+    "quantum": {
+      "Truncation Cost": 0.00,
+      "Wigner Negativity": 0.10,
+      "Average Energy": 1.86
+    }
+  },
+  "Cat State": {
+    "structural": {
+      "Qubits": 1,
+      "Qumodes": 1,
+      "Qubit Gates": 6,
+      "Qumode Gates": 0,
+      "Hybrid Gates": 2,
+      "Circuit Depth": 8
+    },
+    "quantum": {
+      "Truncation Cost": 0.00,
+      "Wigner Negativity": 0.23,
+      "Average Energy": 7.30
+    }
+  },
+  "GKP State": {
+    "structural": {
+      "Qubits": 1,
+      "Qumodes": 1,
+      "Qubit Gates": 48,
+      "Qumode Gates": 1,
+      "Hybrid Gates": 16,
+      "Circuit Depth": 64
+    },
+    "quantum": {
+      "Truncation Cost": 0.00,
+      "Wigner Negativity": 0.62,
+      "Average Energy": 10.14
+    }
+  },
+  "QFT Circuit": {
+    "structural": {
+      "Qubits": 5,
+      "Qumodes": 1,
+      "Qubit Gates": 23,
+      "Qumode Gates": 3,
+      "Hybrid Gates": 20,
+      "Circuit Depth": 29
+    },
+    "quantum": {
+      "Truncation Cost": 0.11,
+      "Wigner Negativity": 0.12,
+      "Average Energy": 3.71
+    }
+  },
+  "CV-DV VQE": {
+    "structural": {
+      "Qubits": 1,
+      "Qumodes": 2,
+      "Qubit Gates": 10,
+      "Qumode Gates": 0,
+      "Hybrid Gates": 10,
+      "Circuit Depth": 20
+    },
+    "quantum": {
+      "Truncation Cost": 0.50,
+      "Wigner Negativity": 0.26,
+      "Average Energy": 4.75
+    }
+  },
+  "CV QAOA": {
+    "structural": {
+      "Qubits": 0,
+      "Qumodes": 1,
+      "Qubit Gates": 0,
+      "Qumode Gates": 11,
+      "Hybrid Gates": 0,
+      "Circuit Depth": 11
+    },
+    "quantum": {
+      "Truncation Cost": 0.29,
+      "Wigner Negativity": 1.00,
+      "Average Energy": 18.23
+    }
+  },
+  "JCH N=3": {
+    "structural": {
+      "Qubits": 3,
+      "Qumodes": 3,
+      "Qubit Gates": 3,
+      "Qumode Gates": 5,
+      "Hybrid Gates": 3,
+      "Circuit Depth": 4
+    },
+    "quantum": {
+      "Truncation Cost": 1.00,
+      "Wigner Negativity": 0.07,
+      "Average Energy": 4.77
+    }
+  },
+  "Shor's Circuit": {
+    "structural": {
+      "Qubits": 1,
+      "Qumodes": 3,
+      "Qubit Gates": 128,
+      "Qumode Gates": 32,
+      "Hybrid Gates": 80,
+      "Circuit Depth": 209
+    },
+    "quantum": {
+      "Truncation Cost": 0.03,
+      "Wigner Negativity": 0.67,
+      "Average Energy": 49.64
+    }
+  }
+}
