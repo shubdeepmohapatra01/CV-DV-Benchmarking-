@@ -22,8 +22,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "circuit_characters")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-STRUCTURAL_KEYS = ['Qubits', 'Qumodes', 'Qubit Gates', 'Qumode Gates', 'Hybrid Gates', 'Total Gates']
-PERFORMANCE_KEYS = ['Truncation Cost', 'Wigner Negativity', 'Average Energy']
+STRUCTURAL_KEYS = ['Qubits', 'Qumodes', 'Qubit Gates', 'Qumode Gates', 'Hybrid Gates', 'Circuit Depth']
+PERFORMANCE_KEYS = ['Truncation Cost', 'Wigner Negativity', 'Average Energy','Max Energy']
 
 # ---------------- Radar Plot ----------------
 
@@ -189,38 +189,36 @@ def main():
 
     # --- QFT Circuit ---
     circuit = qft_circuit(16, 1.1, 2, 1, 2)
-    state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("QFT Circuit", circuit, 16, 5, 1, state)
-    struct_all["QFT Circuit"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
-    perf_all["QFT Circuit"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
-    
-    # # --- VQE Circuit ---
+    max_E = max_energy_incremental(circuit, 16, 1, 5)
+    max_energy_dict["QFT Circuit"] = max_E
+    print(max_E)
+    print("QFT Circuit done")
+
+    # --- CV-DV VQE Circuit ---
     values = [1, 4, 5, 10]
     weights = [2.5, 1, 2, 3]
     max_weight = 7
-    max_weight = 7
     l_val = 3
-    nfocks = [8,8]
+    nfocks = [8, 8]
     ndepth = 5
-
     bkp_fun1, bkp_list1 = bosonic_vqe.binary_knapsack_ham(l_val, values, weights, max_weight)
     bkp_list1 = bosonic_vqe.binary_to_pauli_list(bkp_fun1, bkp_list1)
-    bkp_ham1 = Qobj( bosonic_vqe.qubit_op_to_ham(bkp_list1).full() )
-    en, Xvec, int_results = binary_knapsack_vqe(bkp_ham1, ndepth, nfocks,  maxiter=60, method='BFGS',
-                                    verb=1, threshold=1e-6)
-    circuit = binary_knapsack_vqe_circuit(bkp_ham1,ndepth,nfocks,Xvec)
-    state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("CV-DV VQE", circuit, 8, 1, 2, state)
-    struct_all["CV-DV VQE"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
-    perf_all["CV-DV VQE"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
-    
-    # --- QAOA Circuit ---
-    result = cv_qaoa(32,1,3,5,2)
-    circuit = cv_qaoa_circuit(result.x,32,1,3,5,2)
-    state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("CV QAOA", circuit, 32, 0, 1, state)
-    struct_all["CV QAOA"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
-    perf_all["CV QAOA"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+    bkp_ham1 = Qobj(bosonic_vqe.qubit_op_to_ham(bkp_list1).full())
+    en, Xvec, int_results = binary_knapsack_vqe(bkp_ham1, ndepth, nfocks, maxiter=1, method='BFGS',
+                                                verb=1, threshold=1e-6)
+    circuit = binary_knapsack_vqe_circuit(bkp_ham1, ndepth, nfocks, Xvec)
+    max_E = max_energy_incremental(circuit, 8, 2, 1)
+    max_energy_dict["CV-DV VQE"] = max_E
+    print(max_E)
+    print("CV-DV VQE done")
+
+    # --- CV QAOA Circuit ---
+    result = cv_qaoa(32, 1, 3, 5, 2, maxiter=1)
+    circuit = cv_qaoa_circuit(result.x, 32, 1, 3, 5, 2)
+    max_E = max_energy_incremental(circuit, 32, 1,0)
+    max_energy_dict["CV QAOA"] = max_E
+    print(max_E)
+    print("CV QAOA done")
 
     # --- JCH Circuit ---
     cutoff = 4
