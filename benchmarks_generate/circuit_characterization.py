@@ -10,7 +10,7 @@ from benchmarks_circuit import (
     binary_knapsack_vqe, binary_knapsack_vqe_circuit, shors_circuit, qft_circuit, state_transfer_CVtoDV,cv_qaoa,cv_qaoa_circuit
 )
 from features import (
-    collect_cvcircuit_metrics, evaluate_quantum_metrics,
+    collect_cvcircuit_metrics, evaluate_quantum_metrics,max_energy_incremental
 )
 
 from custom_gates import bosonic_vqe
@@ -22,7 +22,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "circuit_characters")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-STRUCTURAL_KEYS = ['Qubits', 'Qumodes', 'Qubit Gates', 'Qumode Gates', 'Hybrid Gates', 'Circuit Depth']
+STRUCTURAL_KEYS = ['Qubits', 'Qumodes', 'Qubit Gates', 'Qumode Gates', 'Hybrid Gates', 'Total Gates']
 PERFORMANCE_KEYS = ['Truncation Cost', 'Wigner Negativity', 'Average Energy']
 
 # ---------------- Radar Plot ----------------
@@ -117,53 +117,75 @@ def average_over_timesteps(circuit_template, U1, qmr, qbr, cutoff, steps, dt, nu
         "Average Energy": np.mean(energies)
     }
 
-def characterize_circuit(name, circuit, cutoff, num_qubits=1, num_qumodes=1, stateop=None):
+def characterize_circuit(name, circuit, cutoff, num_qubits=1, num_qumodes=1, stateop=None,
+                        omega_qumode=1.0, omega_qubit=1.0):
+    """
+    Collect structural and performance metrics for a circuit, including Max Energy.
+    """
     metrics = collect_cvcircuit_metrics(circuit, cutoff)
+
     if stateop is not None:
-        trunc, wneg, energy = evaluate_quantum_metrics(circuit, stateop, cutoff, num_qumodes, num_qubits)
+        # Existing metrics
+        trunc, wneg, avg_energy = evaluate_quantum_metrics(
+            circuit, stateop, cutoff, num_qumodes, num_qubits,
+            omega_qubit=omega_qubit, omega_qumode=omega_qumode
+        )
+
+        # Max energy by incrementally adding gates
+        max_energy = max_energy_incremental(
+            circuit, num_qumodes, num_qubits, cutoff,
+            num_qumodes=num_qumodes, num_qubits=num_qubits,
+            omega_qumode=omega_qumode, omega_qubit=omega_qubit
+        )
+
+        # Update metrics dictionary
         metrics.update({
             "Truncation Cost": trunc,
             "Wigner Negativity": wneg,
-            "Average Energy": energy
+            "Average Energy": avg_energy,
+            "Max Energy": max_energy
         })
+
     return metrics
 
 # ---------------- Main ----------------
+import os
+import json
+
 def main():
     cutoff = 64
-    struct_all = {}
-    perf_all = {}
+    max_energy_dict = {}
 
     # --- State Transfer ---
-    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6, name='qumode')
+    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6)
     qbr = QuantumRegister(4)
     cr = ClassicalRegister(4)
     circuit = c2qa.CVCircuit(qmr, qbr, cr)
     circuit = state_transfer_CVtoDV(cutoff, circuit, qmr, qbr, cr, 4)
-    state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("StateTransferCVtoDV", circuit, cutoff, 4, 1, state)
-    struct_all["StateTransferCVtoDV"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
-    perf_all["StateTransferCVtoDV"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+    max_E = max_energy_incremental(circuit, cutoff, 1, 4)
+    max_energy_dict["StateTransferCVtoDV"] = max_E
+    print(max_E)
+    print("StateTransferCVtoDV done")
 
     # --- Cat State ---
-    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6, name='qumode')
+    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6)
     qbr = QuantumRegister(1)
     circuit = c2qa.CVCircuit(qmr, qbr)
     circuit = cat_state_circuit(cutoff, circuit, qbr, qmr, alpha=4)
-    state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("Cat State", circuit, cutoff, 1, 1, state)
-    struct_all["Cat State"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
-    perf_all["Cat State"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+    max_E = max_energy_incremental(circuit, cutoff, 1, 1)
+    max_energy_dict["Cat State"] = max_E
+    print(max_E)
+    print("Cat State done")
 
     # --- GKP State ---
-    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6, name='qumode')
+    qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6)
     qbr = QuantumRegister(1)
     circuit = c2qa.CVCircuit(qmr, qbr)
     circuit = gkp_state_circuit(cutoff, circuit, qbr, qmr)
-    state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("GKP State", circuit, cutoff, 1, 1, state)
-    struct_all["GKP State"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
-    perf_all["GKP State"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+    max_E = max_energy_incremental(circuit, cutoff, 1, 1)
+    max_energy_dict["GKP State"] = max_E
+    print(max_E)
+    print("GKP State done")
 
     # --- QFT Circuit ---
     circuit = qft_circuit(16, 1.1, 2, 1, 2)
@@ -173,32 +195,32 @@ def main():
     perf_all["QFT Circuit"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
     
     # # --- VQE Circuit ---
-    # values = [1, 4, 5, 10]
-    # weights = [2.5, 1, 2, 3]
-    # max_weight = 7
-    # max_weight = 7
-    # l_val = 3
-    # nfocks = [8,8]
-    # ndepth = 5
+    values = [1, 4, 5, 10]
+    weights = [2.5, 1, 2, 3]
+    max_weight = 7
+    max_weight = 7
+    l_val = 3
+    nfocks = [8,8]
+    ndepth = 5
 
-    # bkp_fun1, bkp_list1 = bosonic_vqe.binary_knapsack_ham(l_val, values, weights, max_weight)
-    # bkp_list1 = bosonic_vqe.binary_to_pauli_list(bkp_fun1, bkp_list1)
-    # bkp_ham1 = Qobj( bosonic_vqe.qubit_op_to_ham(bkp_list1).full() )
-    # en, Xvec, int_results = binary_knapsack_vqe(bkp_ham1, ndepth, nfocks,  maxiter=60, method='BFGS',
-    #                                 verb=1, threshold=1e-6)
-    # circuit = binary_knapsack_vqe_circuit(bkp_ham1,ndepth,nfocks,Xvec)
-    # state, _, _ = c2qa.util.simulate(circuit)
-    # metrics = characterize_circuit("CV-DV VQE", circuit, 8, 1, 2, state)
-    # struct_all["CV-DV VQE"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
-    # perf_all["CV-DV VQE"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+    bkp_fun1, bkp_list1 = bosonic_vqe.binary_knapsack_ham(l_val, values, weights, max_weight)
+    bkp_list1 = bosonic_vqe.binary_to_pauli_list(bkp_fun1, bkp_list1)
+    bkp_ham1 = Qobj( bosonic_vqe.qubit_op_to_ham(bkp_list1).full() )
+    en, Xvec, int_results = binary_knapsack_vqe(bkp_ham1, ndepth, nfocks,  maxiter=60, method='BFGS',
+                                    verb=1, threshold=1e-6)
+    circuit = binary_knapsack_vqe_circuit(bkp_ham1,ndepth,nfocks,Xvec)
+    state, _, _ = c2qa.util.simulate(circuit)
+    metrics = characterize_circuit("CV-DV VQE", circuit, 8, 1, 2, state)
+    struct_all["CV-DV VQE"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+    perf_all["CV-DV VQE"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
     
     # --- QAOA Circuit ---
-    # result = cv_qaoa(32,1,3,5,2)
-    # circuit = cv_qaoa_circuit(result.x,32,1,3,5,2)
-    # state, _, _ = c2qa.util.simulate(circuit)
-    # metrics = characterize_circuit("CV QAOA", circuit, 32, 0, 1, state)
-    # struct_all["CV QAOA"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
-    # perf_all["CV QAOA"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+    result = cv_qaoa(32,1,3,5,2)
+    circuit = cv_qaoa_circuit(result.x,32,1,3,5,2)
+    state, _, _ = c2qa.util.simulate(circuit)
+    metrics = characterize_circuit("CV QAOA", circuit, 32, 0, 1, state)
+    struct_all["CV QAOA"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+    perf_all["CV QAOA"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
 
     # --- JCH Circuit ---
     cutoff = 4
@@ -210,25 +232,140 @@ def main():
     U1 = JCH_simulation_circuit_display(Nsites, Nqubits=Nsites, cutoff=cutoff,
                                         J=0.1, omega_r=2*np.pi*2, omega_q=2*np.pi*3,
                                         g=2*np.pi*0.5, tau=0.1, timesteps=1)
-    perf = average_over_timesteps(circuit_template, U1, qmr, qbr, cutoff, steps=50, dt=0.1, num_qumodes=Nsites, num_qubits=Nsites)
+    # We only calculate max energy
     circuit = JCH_simulation_circuit_display(Nsites, Nqubits=Nsites, cutoff=cutoff,
-                                        J=0.1, omega_r=2*np.pi*2, omega_q=2*np.pi*3,
-                                        g=2*np.pi*0.5, tau=0.1, timesteps=1)
-    struct = collect_cvcircuit_metrics(circuit, cutoff)
-    struct_all[f"JCH N={Nsites}"] = {k: struct[k] for k in STRUCTURAL_KEYS}
-    perf_all[f"JCH N={Nsites}"] = perf
+                                             J=0.1, omega_r=2*np.pi*2, omega_q=2*np.pi*3,
+                                             g=2*np.pi*0.5, tau=0.1, timesteps=1)
+    max_E = max_energy_incremental(circuit, cutoff, Nsites, Nsites)
+    max_energy_dict[f"JCH N={Nsites}"] = max_E
+    print(max_E)
+    print("JCH Circuit done")
 
     # --- Shor's Circuit ---
     cutoff = 64
     circuit = shors_circuit(15, 2, 15, 2, 0.222, cutoff)
-    state, _, _ = c2qa.util.simulate(circuit)
-    metrics = characterize_circuit("Shors Circuit", circuit, cutoff, 1, 3, state)
-    struct_all["Shor's Circuit"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
-    perf_all["Shor's Circuit"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+    max_E = max_energy_incremental(circuit, cutoff, 3, 1)
+    max_energy_dict["Shors Circuit"] = max_E
+    print(max_E)
+    print("Shors Circuit done")
+
+    # --- Save all max energy values ---
+    output_file = os.path.join("circuit_characters", "max_energy.json")
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    with open(output_file, "w") as f:
+        json.dump(max_energy_dict, f, indent=4)
+
+    print(f"Max energy values saved to {output_file}")
+
+
+# def main():
+#     cutoff = 64
+#     struct_all = {}
+#     perf_all = {}
+
+#     # --- State Transfer ---
+#     qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6, name='qumode')
+#     qbr = QuantumRegister(4)
+#     cr = ClassicalRegister(4)
+#     circuit = c2qa.CVCircuit(qmr, qbr, cr)
+#     circuit = state_transfer_CVtoDV(cutoff, circuit, qmr, qbr, cr, 4)
+#     state, _, _ = c2qa.util.simulate(circuit)
+#     # metrics = characterize_circuit("StateTransferCVtoDV", circuit, cutoff, 4, 1, state)
+#     # struct_all["StateTransferCVtoDV"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+#     # perf_all["StateTransferCVtoDV"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+#     print("Circuit done")
+
+#     # --- Cat State ---
+#     qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6, name='qumode')
+#     qbr = QuantumRegister(1)
+#     circuit = c2qa.CVCircuit(qmr, qbr)
+#     circuit = cat_state_circuit(cutoff, circuit, qbr, qmr, alpha=4)
+#     state, _, _ = c2qa.util.simulate(circuit)
+#     metrics = characterize_circuit("Cat State", circuit, cutoff, 1, 1, state)
+#     struct_all["Cat State"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+#     perf_all["Cat State"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+#     print("Circuit done")
+
+#     # --- GKP State ---
+#     qmr = c2qa.QumodeRegister(1, num_qubits_per_qumode=6, name='qumode')
+#     qbr = QuantumRegister(1)
+#     circuit = c2qa.CVCircuit(qmr, qbr)
+#     circuit = gkp_state_circuit(cutoff, circuit, qbr, qmr)
+#     state, _, _ = c2qa.util.simulate(circuit)
+#     metrics = characterize_circuit("GKP State", circuit, cutoff, 1, 1, state)
+#     struct_all["GKP State"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+#     perf_all["GKP State"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+#     print("Circuit done")
+
+#     # --- QFT Circuit ---
+#     circuit = qft_circuit(16, 1.1, 2, 1, 2)
+#     state, _, _ = c2qa.util.simulate(circuit)
+#     metrics = characterize_circuit("QFT Circuit", circuit, 16, 5, 1, state)
+#     struct_all["QFT Circuit"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+#     perf_all["QFT Circuit"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+#     print("Circuit done")
+    
+#     # # --- VQE Circuit ---
+#     values = [1, 4, 5, 10]
+#     weights = [2.5, 1, 2, 3]
+#     max_weight = 7
+#     max_weight = 7
+#     l_val = 3
+#     nfocks = [8,8]
+#     ndepth = 5
+
+#     bkp_fun1, bkp_list1 = bosonic_vqe.binary_knapsack_ham(l_val, values, weights, max_weight)
+#     bkp_list1 = bosonic_vqe.binary_to_pauli_list(bkp_fun1, bkp_list1)
+#     bkp_ham1 = Qobj( bosonic_vqe.qubit_op_to_ham(bkp_list1).full() )
+#     en, Xvec, int_results = binary_knapsack_vqe(bkp_ham1, ndepth, nfocks,  maxiter=1, method='BFGS',
+#                                     verb=1, threshold=1e-6)
+#     circuit = binary_knapsack_vqe_circuit(bkp_ham1,ndepth,nfocks,Xvec)
+#     state, _, _ = c2qa.util.simulate(circuit)
+#     metrics = characterize_circuit("CV-DV VQE", circuit, 8, 1, 2, state)
+#     struct_all["CV-DV VQE"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+#     perf_all["CV-DV VQE"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+#     print("Circuit done")
+    
+#     # --- QAOA Circuit ---
+#     result = cv_qaoa(32,1,3,5,2,maxiter=1)
+#     circuit = cv_qaoa_circuit(result.x,32,1,3,5,2)
+#     state, _, _ = c2qa.util.simulate(circuit)
+#     metrics = characterize_circuit("CV QAOA", circuit, 32, 0, 1, state)
+#     struct_all["CV QAOA"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+#     perf_all["CV QAOA"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+#     print("Circuit done")
+
+#     # --- JCH Circuit ---
+#     cutoff = 4
+#     Nsites = 3
+#     qmr = c2qa.QumodeRegister(Nsites, num_qubits_per_qumode=2)
+#     qbr = QuantumRegister(Nsites)
+#     circuit_template = c2qa.CVCircuit(qmr, qbr)
+#     circuit_template.cv_initialize(2, qmr[0])
+#     U1 = JCH_simulation_circuit_display(Nsites, Nqubits=Nsites, cutoff=cutoff,
+#                                         J=0.1, omega_r=2*np.pi*2, omega_q=2*np.pi*3,
+#                                         g=2*np.pi*0.5, tau=0.1, timesteps=1)
+#     perf = average_over_timesteps(circuit_template, U1, qmr, qbr, cutoff, steps=50, dt=0.1, num_qumodes=Nsites, num_qubits=Nsites)
+#     circuit = JCH_simulation_circuit_display(Nsites, Nqubits=Nsites, cutoff=cutoff,
+#                                         J=0.1, omega_r=2*np.pi*2, omega_q=2*np.pi*3,
+#                                         g=2*np.pi*0.5, tau=0.1, timesteps=1)
+#     struct = collect_cvcircuit_metrics(circuit, cutoff)
+#     struct_all[f"JCH N={Nsites}"] = {k: struct[k] for k in STRUCTURAL_KEYS}
+#     perf_all[f"JCH N={Nsites}"] = perf
+#     print("Circuit done")
+
+#     # --- Shor's Circuit ---
+#     cutoff = 64
+#     circuit = shors_circuit(15, 2, 15, 2, 0.222, cutoff)
+#     state, _, _ = c2qa.util.simulate(circuit)
+#     metrics = characterize_circuit("Shors Circuit", circuit, cutoff, 1, 3, state)
+#     struct_all["Shor's Circuit"] = {k: metrics[k] for k in STRUCTURAL_KEYS}
+#     perf_all["Shor's Circuit"] = {k: metrics[k] for k in PERFORMANCE_KEYS}
+#     print("Circuit done")
 
     # ---- Plot All Summary Charts ----
-    plot_radar_group(struct_all, STRUCTURAL_KEYS, os.path.join(OUTPUT_DIR, "summary_structural.png"))
-    plot_radar_group(perf_all, PERFORMANCE_KEYS, os.path.join(OUTPUT_DIR, "summary_quantum.png"))
+    # plot_radar_group(struct_all, STRUCTURAL_KEYS, os.path.join(OUTPUT_DIR, "summary_structural.png"))
+    # plot_radar_group(perf_all, PERFORMANCE_KEYS, os.path.join(OUTPUT_DIR, "summary_quantum.png"))
 
 if __name__ == "__main__":
     main()

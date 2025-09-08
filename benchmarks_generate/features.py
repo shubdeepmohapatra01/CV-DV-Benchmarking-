@@ -6,6 +6,8 @@ import c2qa
 from collections import Counter
 import matplotlib.pyplot as plt
 from  qiskit.quantum_info import DensityMatrix
+from qiskit import QuantumRegister, ClassicalRegister
+import copy
 
 def collect_cvcircuit_metrics(circuit,cutoff):
     from collections import Counter
@@ -185,6 +187,34 @@ def average_energy_all(stateop, num_qumodes, num_qubits, cutoff, omega_qumode=1.
         E += omega_qubit * np.trace(red_dm.data @ sz).real
 
     return E
+
+def max_energy_incremental(circuit, cutoff, num_qumodes=1, num_qubits=1,
+                           omega_qumode=1.0, omega_qubit=1.0):
+    """
+    Compute maximum energy by incrementally building the circuit gate-by-gate.
+    """
+    # Start with an empty circuit
+    running_circuit = copy.deepcopy(circuit)
+    
+    running_circuit.data = []
+    
+    # Simulate initial state
+    state, _, _ = c2qa.util.simulate(running_circuit)
+    max_energy = average_energy_all(state, num_qumodes, num_qubits, cutoff, omega_qumode, omega_qubit)
+
+    # Loop over gates in original circuit
+    for instr, qargs, cargs in circuit.data:
+        # Append the next gate
+        running_circuit.append(instr, qargs, cargs)
+        
+        # Simulate the current state
+        state, _, _ = c2qa.util.simulate(running_circuit)
+        
+        # Compute energy
+        energy = average_energy_all(state, num_qumodes, num_qubits, cutoff, omega_qumode, omega_qubit)
+        max_energy = max(max_energy, energy)
+    
+    return max_energy
 
 
     
