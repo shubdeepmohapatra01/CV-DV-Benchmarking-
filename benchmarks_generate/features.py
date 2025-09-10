@@ -149,11 +149,10 @@ def wigner_negativity_all_modes(stateop, num_qumodes, cutoff, axes_min=-6, axes_
         W /= area  # Normalize so ∫W = 1
         abs_area = np.sum(np.abs(W)) * dx * dy
 
-        negativity = 0.5 * (abs_area - 1.0)
-        negativity = min(max(negativity, 0), 1)
+        negativity = (abs_area - 1.0)
         total_negativity += negativity
 
-        print(f"Mode {i}: ∫W = 1.000, ∫|W| = {abs_area:.3f}, Negativity = {negativity:.3f}")
+        # print(f"Mode {i}: ∫W = 1.000, ∫|W| = {abs_area:.3f}, Negativity = {negativity:.3f}")
 
     return total_negativity / num_qumodes
 
@@ -187,34 +186,51 @@ def average_energy_all(stateop, num_qumodes, num_qubits, cutoff, omega_qumode=1.
         E += omega_qubit * np.trace(red_dm.data @ sz).real
 
     return E
-
-def max_energy_incremental(circuit, cutoff, num_qumodes=1, num_qubits=1,
-                           omega_qumode=1.0, omega_qubit=1.0):
+def max_energy_wigner_trunc_incremental(circuit, cutoff, num_qumodes=1, num_qubits=1,n_tail=5,
+                                  omega_qumode=1.0, omega_qubit=1.0):
     """
-    Compute maximum energy by incrementally building the circuit gate-by-gate.
+    Compute maximum energy and maximum Wigner negativity by incrementally
+    building the circuit gate-by-gate. Also return final state energy and
+    final state Wigner negativity.
     """
+    import copy
+    
     # Start with an empty circuit
     running_circuit = copy.deepcopy(circuit)
-    
     running_circuit.data = []
     
     # Simulate initial state
     state, _, _ = c2qa.util.simulate(running_circuit)
+    
+    # Initial values
     max_energy = average_energy_all(state, num_qumodes, num_qubits, cutoff, omega_qumode, omega_qubit)
-
+    max_wigner = wigner_negativity_all_modes(state, num_qumodes, cutoff)
+    max_trunc = truncation_cost_all_modes(state, num_qumodes, cutoff, n_tail=n_tail)
+    
     # Loop over gates in original circuit
     for instr, qargs, cargs in circuit.data:
-        # Append the next gate
         running_circuit.append(instr, qargs, cargs)
         
         # Simulate the current state
         state, _, _ = c2qa.util.simulate(running_circuit)
         
-        # Compute energy
+        # Compute energy and Wigner negativity
         energy = average_energy_all(state, num_qumodes, num_qubits, cutoff, omega_qumode, omega_qubit)
+        wigner_current = wigner_negativity_all_modes(state, num_qumodes, cutoff)
+        trunc = truncation_cost_all_modes(state, num_qumodes, cutoff, n_tail=n_tail)
+        
+        # Update maxima
         max_energy = max(max_energy, energy)
+        max_wigner = max(max_wigner, wigner_current)
+        max_trunc = max(max_trunc, trunc)
     
-    return max_energy
+    # After full circuit:
+    final_energy = energy
+    final_wigner = wigner_current
+    final_trunc = trunc
+    
+    return max_energy, max_wigner, max_trunc, final_energy, final_wigner, final_trunc
+
 
 
     
